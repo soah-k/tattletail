@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Tattletail is intentionally NOT sandboxed: a global CGEvent tap and event
+	  posting into other apps are incompatible with the App Store sandbox.
+	  Do NOT add com.apple.security.app-sandbox here.
+
+	  Hardened Runtime is enabled via build settings (required for notarization).
+	  Pure-Swift CGEvent work needs no hardened-runtime exceptions.
+	-->
+</dict>
+</plist>

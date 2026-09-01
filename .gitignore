@@ -1,0 +1,19 @@
+# Generated Xcode project — regenerate with `xcodegen generate`
+*.xcodeproj
+
+# Xcode user state / build products
+xcuserdata/
+*.xcworkspace
+DerivedData/
+build/
+*.xcarchive
+
+# Release artifacts
+*.dmg
+*.zip
+
+# macOS cruft
+.DS_Store
+
+# Notarization credentials should never be committed
+notarytool-*.json

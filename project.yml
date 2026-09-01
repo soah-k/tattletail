@@ -1,0 +1,92 @@
+# Canonical XcodeGen spec for the PUBLIC (free, open-source) repo.
+# `Scripts/sync-free-repo.sh` copies this to the public repo as `project.yml`.
+# The public repo has no `Tattletail/Paid/` folder, so there is a single app
+# target built with the FREE_BUILD compilation condition. Same app identity,
+# version, and signing config as the paid edition (a paid install replaces it in
+# place). Keep MARKETING_VERSION / CURRENT_PROJECT_VERSION in lockstep with
+# project.yml (the release pipeline stamps both from the same tag).
+name: Tattletail
+options:
+  bundleIdPrefix: com.soahk
+  deploymentTarget:
+    macOS: "26.0"
+  createIntermediateGroups: true
+  groupSortPosition: top
+
+settings:
+  base:
+    MARKETING_VERSION: "1.12.0"
+    CURRENT_PROJECT_VERSION: "18"
+    SWIFT_VERSION: "5.0"
+    CODE_SIGN_STYLE: Manual
+    CODE_SIGN_IDENTITY: "-"
+    DEVELOPMENT_TEAM: ""
+    ENABLE_HARDENED_RUNTIME: YES
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  TattletailFree:
+    type: application
+    platform: macOS
+    sources:
+      - path: Tattletail
+        excludes:
+          - "Paid/**"
+    settings:
+      base:
+        PRODUCT_NAME: Tattletail
+        PRODUCT_MODULE_NAME: Tattletail
+        INFOPLIST_FILE: Tattletail/Resources/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Tattletail/Resources/Tattletail.entitlements
+        PRODUCT_BUNDLE_IDENTIFIER: com.soahk.Tattletail
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        COMBINE_HIDPI_IMAGES: YES
+      configs:
+        Debug:
+          ENABLE_TESTABILITY: YES
+          ONLY_ACTIVE_ARCH: YES
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG FREE_BUILD
+        Release:
+          ONLY_ACTIVE_ARCH: NO
+          ARCHS: "arm64 x86_64"
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: FREE_BUILD
+          OTHER_CODE_SIGN_FLAGS: "--options runtime"
+
+  TattletailFreeTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      # The public repo does not contain PaidFeatureTests.swift (it is excluded
+      # from the sync), so no per-file exclude is needed here.
+      - path: TattletailTests
+    dependencies:
+      - target: TattletailFree
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.soahk.TattletailFreeTests
+        GENERATE_INFOPLIST_FILE: YES
+        # TattletailFree's PRODUCT_NAME is "Tattletail" (same app identity), so
+        # the host app bundle is Tattletail.app — point TEST_HOST at the real
+        # product or Xcode can't find the test host.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Tattletail.app/Contents/MacOS/Tattletail"
+        BUNDLE_LOADER: "$(TEST_HOST)"
+
+schemes:
+  TattletailFree:
+    build:
+      targets:
+        TattletailFree: all
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - TattletailFreeTests
+    profile:
+      config: Release
+    archive:
+      config: Release

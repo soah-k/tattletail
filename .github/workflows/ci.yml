@@ -1,0 +1,91 @@
+# DO NOT EDIT IN THE PUBLIC REPO.
+# This file is generated from the private repo (Scripts/public-ci.yml) and
+# synced into the public free-edition repo as .github/workflows/ci.yml by
+# Scripts/sync-free-repo.sh. Any manual change here will be overwritten on the
+# next release. It builds the FREE edition only and references NO secrets, so it
+# is safe to run on fork pull requests.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & Test free edition (universal)
+    # macos-26 (arm64): every installed Xcode is 26.x with a macOS 26 SDK,
+    # so the default toolchain builds our 26.0 deployment target as-is.
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Toolchain info
+        run: |
+          xcodebuild -version
+          xcodegen --version 2>/dev/null || echo "xcodegen: not preinstalled"
+
+      - name: Install xcodegen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: xcodegen generate
+
+      - name: Run unit tests (free edition)
+        run: |
+          set -o pipefail
+          xcodebuild -project Tattletail.xcodeproj -scheme TattletailFree \
+            -configuration Debug -destination 'platform=macOS' \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
+            test | xcbeautify
+
+      - name: Build Release (universal, ad-hoc signed)
+        run: |
+          set -o pipefail
+          xcodebuild -project Tattletail.xcodeproj -scheme TattletailFree \
+            -configuration Release -destination 'generic/platform=macOS' \
+            -derivedDataPath build \
+            ARCHS="arm64 x86_64" ONLY_ACTIVE_ARCH=NO \
+            CODE_SIGN_IDENTITY="-" CODE_SIGNING_REQUIRED=NO \
+            build | xcbeautify
+
+      - name: Strip debug symbols (shrinks the binary ~60%)
+        run: |
+          Scripts/strip-app.sh \
+            build/Build/Products/Release/Tattletail.app \
+            Tattletail/Resources/Tattletail.entitlements
+
+      - name: Verify universal binary
+        run: |
+          BIN="build/Build/Products/Release/Tattletail.app/Contents/MacOS/Tattletail"
+          lipo -archs "$BIN"
+          ARCHS=$(lipo -archs "$BIN")
+          case "$ARCHS" in
+            *arm64*x86_64*|*x86_64*arm64*) echo "Universal binary confirmed: $ARCHS" ;;
+            *) echo "::error::Binary is not universal (got: $ARCHS)"; exit 1 ;;
+          esac
+
+      - name: Verify code signature
+        run: |
+          codesign --verify --strict build/Build/Products/Release/Tattletail.app
+          codesign -dv build/Build/Products/Release/Tattletail.app 2>&1 | grep -E 'Identifier|flags'
+
+      # Zip with ditto before uploading: upload-artifact strips executable
+      # bits and unwraps a bare directory, which corrupts a .app bundle.
+      - name: Stage app artifact
+        run: |
+          ditto -c -k --keepParent \
+            build/Build/Products/Release/Tattletail.app \
+            Tattletail-${{ github.sha }}.zip
+
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Tattletail-${{ github.sha }}
+          path: Tattletail-${{ github.sha }}.zip
+          if-no-files-found: error
